@@ -526,8 +526,8 @@
                     <span id="modal-course-price" class="text-2xl font-black text-white font-bold">99,000 ₮</span>
                 </div>
                 <div class="flex gap-2 w-full sm:w-auto">
-                    <button onclick="closeCourseDetailsModal()" class="flex-1 sm:flex-none px-5 py-3 rounded-xl border border-white/10 hover:bg-white/5 text-xs font-bold text-slate-300 font-bold">Хаах</button>
-                    <button id="modal-checkout-btn" class="flex-1 sm:flex-none px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold tracking-wide transition shadow-lg shadow-violet-500/20 font-bold">
+                    <button type="button" onclick="closeCourseDetailsModal()" class="flex-1 sm:flex-none px-5 py-3 rounded-xl border border-white/10 hover:bg-white/5 text-xs font-bold text-slate-300 font-bold">Хаах</button>
+                    <button type="button" id="modal-checkout-btn" class="flex-1 sm:flex-none px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold tracking-wide transition shadow-lg shadow-violet-500/20 font-bold">
                         <i class="fa-solid fa-wallet mr-1"></i> Бүртгүүлж, Төлөх рүү шилжих
                     </button>
                 </div>
@@ -544,7 +544,8 @@
                         <span class="text-xs text-violet-400 font-bold tracking-wider uppercase font-bold">Төлбөрийн алхам</span>
                         <button onclick="closeCheckout()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-times"></i></button>
                     </div>
-                    <h3 class="text-lg font-bold text-white mt-1 font-bold" id="checkout-course-name font-bold">Сургалтын багц</h3>
+                    <!-- Fixed id syntax error here to prevent JS execution crashes -->
+                    <h3 class="text-lg font-bold text-white mt-1 font-bold" id="checkout-course-name">Сургалтын багц</h3>
                     <p class="text-[10px] text-slate-400 mt-1">Төлбөр төлөгдөнгүүт таны хичээл автоматаар нээгдэж, кабинетад идэвхжинэ.</p>
                 </div>
 
@@ -794,7 +795,8 @@
             selectedPaymentBank: 'khan',
             activeDetailsCourse: null,
             activeCheckoutCourse: null,
-            userProgress: {}
+            userProgress: {},
+            pendingCheckoutCourseId: null // Added to hold the pending course checkout state during authentication
         };
 
         // In-memory registry to hold dynamic uploaded files as Object URLs for instant browser playback
@@ -973,11 +975,18 @@
                 saveAllStores();
                 renderAll();
 
-                if(matched.role === 'admin') {
-                    switchTab('admin');
+                // If user was in middle of checkout, resume directly to payment
+                if (AppState.pendingCheckoutCourseId) {
+                    const pendingId = AppState.pendingCheckoutCourseId;
+                    AppState.pendingCheckoutCourseId = null;
+                    openCheckout(pendingId);
                 } else {
-                    switchTab('dashboard');
-                    switchDashboardView('courses');
+                    if(matched.role === 'admin') {
+                        switchTab('admin');
+                    } else {
+                        switchTab('dashboard');
+                        switchDashboardView('courses');
+                    }
                 }
             } else {
                 showToast('Алдаа', 'Нэвтрэх нэр эсвэл нууц үг буруу байна.', 'error');
@@ -1017,8 +1026,16 @@
             closeAuthModal();
             saveAllStores();
             renderAll();
-            switchTab('dashboard');
-            switchDashboardView('courses');
+
+            // If user registered from a pending checkout, resume right away
+            if (AppState.pendingCheckoutCourseId) {
+                const pendingId = AppState.pendingCheckoutCourseId;
+                AppState.pendingCheckoutCourseId = null;
+                openCheckout(pendingId);
+            } else {
+                switchTab('dashboard');
+                switchDashboardView('courses');
+            }
         }
 
         function logout() {
@@ -1791,6 +1808,7 @@
 
         function openCheckout(courseId) {
             if(!AppState.currentUser) {
+                AppState.pendingCheckoutCourseId = courseId; // Store intended course checkout
                 showToast('Нэвтрэх шаардлагатай', 'Сургалтанд бүртгүүлж худалдан авахын тулд эхлээд системд нэвтрээрэй.', 'info');
                 openAuthModal('login');
                 return;
@@ -1805,7 +1823,7 @@
             document.getElementById('checkout-course-price').innerText = `${course.price.toLocaleString()} ₮`;
             
             const referenceId = `BRAIN${Math.floor(1000 + Math.random() * 9000)}`;
-            document.getElementById('checkout-tx-ref').innerText = `${referenceId} ${AppState.currentUser.phone}`;
+            document.getElementById('checkout-tx-ref').innerText = `${referenceId} ${AppState.currentUser.phone || ''}`;
 
             document.getElementById('payment-verify-progress').style.width = '0%';
             document.getElementById('sim-status').innerText = 'Гүйлгээ хүлээж байна';

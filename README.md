@@ -1,0 +1,2 @@
+# Ai
+Mongolian artificial intelligence
